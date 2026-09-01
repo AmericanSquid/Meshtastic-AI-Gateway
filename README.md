@@ -1,66 +1,41 @@
 # Mesh AI Gateway
 
-A Linux-first, headless Meshtastic AI gateway. The daemon owns the radio and AI routing; a detachable curses TUI controls and observes it over a local Unix socket.
+Mesh AI Gateway is a Linux-oriented, headless Meshtastic gateway. It keeps the Meshtastic connection and AI routing in a daemon, while a detachable curses TUI monitors and controls the daemon through a local Unix socket.
 
-## What v0.1 includes
+## Features
 
-- Headless daemon that stays running independently of the TUI
 - Meshtastic TCP/Wi-Fi, BLE, and serial transports
-- Multiple named Ollama servers
-- Generic OpenAI-compatible providers for services such as Hugging Face Inference Providers and ncloud
-- Hermes Agent backend via `hermes -z`
-- Ordered provider failover with finite attempts and request timeouts
-- Finite Meshtastic connection attempts with visible retry state
-- Per-node in-memory conversation history
-- UTF-8-safe response truncation and chunking
-- Local mesh commands: `!status`, `!reset`, `!provider [auto|ID]`
-- Unix socket IPC
-- Detachable curses TUI
-- Start/stop/restart daemon from the TUI through systemd
-- YAML config with validation and safe reload
-- journald/stdout logging plus a TUI-visible in-memory log tail
+- Ollama and OpenAI-compatible chat providers, with priority-based failover
+- Optional Hermes agent provider, run through the configured Hermes command
+- Per-sender in-memory conversation history
+- UTF-8-safe response truncation and chunking for mesh messages
+- Mesh commands for health, provider/model selection, routing, new chats, and restart
+- YAML validation and live reload
+- Unix-socket IPC for status, logs, nodes, provider checks, mesh reconnects, and outbound messages
+- Curses TUI for daemon/service control, logs, nodes, providers, configuration reload, and the bundled Laundry HMM module
+- Foreground operation or a generated systemd user service
 
-## Architecture
+## Requirements and installation
 
-```text
-                    Curses TUI
-                        |
-             +----------+----------+
-             |                     |
-          systemd              Unix socket
-             |                     |
-             +----> gateway daemon <----+
-                        |                |
-                Meshtastic manager   AI manager
-                 TCP / BLE / Serial   Ollama x N
-                        |             OpenAI-compatible x N
-                    message router     Hermes
-                        |
-                sessions / queues
-```
-
-The TUI never owns the bridge. Pressing `Q` detaches the TUI and leaves the daemon alone.
-
-## Install
-
-Python 3.11+ is required.
-
-With `uv`:
+Python 3.11 or newer and Meshtastic 2.7.11 or newer are required. Install the package in a virtual environment:
 
 ```bash
-uv venv
-uv pip install -e .
-```
-
-Or with pip inside a virtual environment:
-
-```bash
+python3 -m venv .venv
+. .venv/bin/activate
 python -m pip install -e .
 ```
 
-The project requires Meshtastic Python 2.7.11 or newer in the 2.x line. That release line provides TCP, BLE, and serial interfaces.
+For development, install the test dependency as well:
 
-## Initial configuration
+```bash
+python -m pip install -e '.[dev]'
+```
+
+The pinned `requirements.txt` is also available for reproducing the repository's environment. The Laundry HMM module additionally requires `numpy` and `hmmlearn`; these are present in that requirements file but are not package dependencies.
+
+## Configure
+
+Create the default configuration at `~/.config/mesh-ai-gateway/config.yaml`:
 
 ```bash
 mesh-ai-gateway config init
@@ -68,160 +43,122 @@ $EDITOR ~/.config/mesh-ai-gateway/config.yaml
 mesh-ai-gateway config check
 ```
 
-The default example is TCP/Wi-Fi because it is convenient for a stationary Linux gateway. Change `mesh.transport` to `ble` or `serial` and fill the corresponding section when needed.
+The generated example uses a TCP Meshtastic connection. Set `mesh.transport` to `tcp`, `ble`, or `serial`, then provide the corresponding endpoint:
 
-### Multiple Ollama servers
+```yaml
+mesh:
+  transport: tcp
+  tcp:
+    host: 192.168.1.80
+    port: 4403
+```
 
-Each server is just another provider instance with a stable YAML ID and a customizable display name:
+AI providers are configured under `ai.providers`. Supported types are `ollama`, `openai`, and `hermes`; lower `priority` values are tried first. `ai.mode` accepts `auto` or `manual`, while runtime provider selection can be changed from the TUI or mesh commands.
+
+An Ollama provider looks like this:
 
 ```yaml
 ai:
+  mode: auto
   providers:
-    basement:
-      name: "Big Chungus GPU Rig"
+    local:
+      name: Local Ollama
       type: ollama
       priority: 1
-      host: http://192.168.1.20:11434
-      model: qwen3:30b
-
-    local:
-      name: "Lil Local Guy"
-      type: ollama
-      priority: 2
       host: http://127.0.0.1:11434
       model: qwen3:8b
 ```
 
-Renaming `name` does not change the stable provider ID used by routing.
-
-### Hugging Face / ncloud / other OpenAI-compatible APIs
+OpenAI-compatible providers use `base_url`, `model`, and optionally `api_key_env`. The gateway reads the key from that environment variable and does not store it in YAML:
 
 ```yaml
-hf:
-  name: "HF Backup"
-  type: openai
-  priority: 3
-  base_url: https://router.huggingface.co/v1
-  api_key_env: HF_TOKEN
-  model: your-model
-
-ncloud:
-  name: "nCloud Backup"
-  type: openai
-  priority: 4
-  base_url: https://your-endpoint.example/v1
-  api_key_env: NCLOUD_API_KEY
-  model: your-model
+ai:
+  providers:
+    cloud:
+      name: Cloud backup
+      type: openai
+      priority: 2
+      base_url: https://example.invalid/v1
+      api_key_env: CLOUD_API_KEY
+      model: your-model
 ```
 
-API keys stay out of YAML. For the systemd service, put them in:
+When using the generated systemd service, put the variables in `~/.config/mesh-ai-gateway/env` (mode 600), for example `CLOUD_API_KEY=...`. The service installer creates this file if it does not exist.
 
-```text
-~/.config/mesh-ai-gateway/env
-```
+Other useful settings include `mesh.channel`, `mesh.reconnect`, `ai.request` retry/timeout values, `bridge` chunk/history/queue limits, `bridge.system_prompt`, `logging.level`, `logging.retain_lines`, and `ipc.socket_path`. See [`config.example.yaml`](config.example.yaml) for the complete schema and defaults. BLE requires `mesh.ble.address`; serial requires `mesh.serial.port`.
 
-Example:
+## Run
 
-```text
-HF_TOKEN=hf_...
-NCLOUD_API_KEY=...
-```
-
-The service file loads that file with `EnvironmentFile=`.
-
-### Hermes
-
-A Hermes provider shells out to Hermes's one-shot interface:
-
-```yaml
-hermes:
-  name: "Hermes"
-  type: hermes
-  enabled: true
-  priority: 10
-  command: hermes
-```
-
-This is intentionally a simple adapter in v0.1. Hermes remains architecturally distinct enough that richer agent-specific routing can be added later.
-
-## Run in the foreground
-
-Useful while configuring/debugging:
+Run the daemon in the foreground and attach the TUI from another terminal:
 
 ```bash
 mesh-ai-gateway daemon
-```
-
-Then in another terminal:
-
-```bash
 mesh-ai-gateway tui
 ```
 
-Press `Q` to detach. The daemon keeps running.
+The TUI can start, stop, or restart the daemon through systemd, show status/logs/nodes/providers, request a mesh reconnect, edit and reload YAML, and detach with `Q`. Provider screen keys are `0` for automatic routing, `1-9` to select a provider, and `T` to run health checks.
+
+Useful CLI commands:
+
+```bash
+mesh-ai-gateway status                 # daemon status as JSON
+mesh-ai-gateway providers test         # health-check configured providers
+mesh-ai-gateway config path            # print the config path
+```
+
+Messages received on the configured channel are answered on the same channel. Direct messages receive a direct reply; channel messages are broadcast. Responses are limited and split according to the `bridge` settings.
+
+### Mesh commands
+
+The daemon handles these commands sent over Meshtastic:
+
+```text
+!help
+!health
+!providers
+!provider [auto|<id>]
+!routing auto|manual
+!models
+!model <id>
+!hermes
+!chat
+!new
+!reset
+!status
+!restart
+```
+
+`!hermes` and `!chat` switch between the optional Hermes agent and normal provider routing. Runtime selections and conversation history are not persisted across daemon restarts.
 
 ## systemd user service
 
-Install the unit using the same Python environment that contains the package:
+Install and enable the generated user unit:
 
 ```bash
 mesh-ai-gateway service install
 mesh-ai-gateway service enable
-```
-
-Useful commands:
-
-```bash
 mesh-ai-gateway service start
-mesh-ai-gateway service stop
-mesh-ai-gateway service restart
 mesh-ai-gateway service status
 ```
 
-The TUI can also start/stop/restart the service.
-
-For a systemd **user** service to continue running when that Linux account is fully logged out, enable lingering for the account once:
+`service stop`, `service restart`, and `service disable` are also supported. To keep a user service running after logout, enable lingering separately:
 
 ```bash
 loginctl enable-linger "$USER"
 ```
 
-That is an OS policy choice, so the installer does not run it automatically.
+The installer also accepts `service install --system` for a system unit; use `--user NAME` when the system unit should run as a specific account.
 
-## TUI controls
+## Project structure
 
 ```text
-S  Start/stop daemon
-R  Restart daemon
-M  Reconnect Meshtastic
-P  Providers
-N  Nodes
-L  Logs
-C  Edit YAML then reload
-Q  Detach TUI
+mesh_ai_gateway/       Package: CLI, daemon, mesh, providers, IPC, and TUI
+config.example.yaml    Complete example configuration
+hermes_worker.py       JSON-line worker used by the Hermes provider
+tests/                 Configuration, provider, session, and UTF-8 utility tests
 ```
 
-On the provider screen, `0` returns to automatic fallback, `1-9` pins a provider, and `T` health-checks all configured providers.
-
-## Failure behavior
-
-The goal is finite and visible, not elaborate:
-
-- Mesh connection: try `mesh.reconnect.attempts` times, showing the attempt count. If all fail, remain alive and retry after `retry_after_failure` seconds.
-- AI provider: try `ai.request.attempts_per_provider` times within `ai.request.timeout`, then move to the next provider.
-- All AI providers fail: send a short unavailable message and keep the daemon running.
-- Invalid YAML reload: reject the new config and keep the existing running configuration.
-- TUI exits or crashes: daemon is unaffected.
-- Daemon crashes: systemd uses `Restart=on-failure`.
-
-## Notes / v0.1 boundaries
-
-- Conversation history is in memory and resets when the daemon restarts.
-- Runtime provider selection from the TUI or `!provider` is not persisted to YAML.
-- Changing `ipc.socket_path` during a live config reload requires a daemon restart to move the socket.
-- The daemon replies directly to the sending node on the incoming channel.
-- BLE behavior depends on the host's Bluetooth stack and permissions.
-- The Meshtastic Python callbacks are synchronous; blocking transport construction is isolated from the asyncio message workers with threads.
+The daemon's conversation history is in memory, and the bundled Laundry HMM stores its recordings/model in a local SQLite file. The latter is an application-specific TUI module rather than a general gateway feature.
 
 ## Development
 
