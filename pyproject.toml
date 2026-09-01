@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A headless Meshtastic AI gateway with provider failover and a detachable curses TUI"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "GPL-3.0-or-later"}
+license = {text = "GPL-3.0-only"}
 dependencies = [
   "meshtastic>=2.7.11,<3.0",
   "PyYAML>=6.0.1,<7",
