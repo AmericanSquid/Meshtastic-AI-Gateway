@@ -57,6 +57,86 @@ ai:
     #   api_key_env: HF_TOKEN
     #   model: your-model
 
+    # OpenAI API, including Codex models.  This gateway uses the Chat
+    # Completions endpoint; use a model available to your API account.
+    # openai-codex:
+    #   name: "OpenAI Codex"
+    #   type: openai
+    #   enabled: true
+    #   priority: 3
+    #   base_url: https://api.openai.com/v1
+    #   api_key_env: OPENAI_API_KEY
+    #   model: gpt-5.6-terra
+
+    # OpenRouter:
+    # openrouter:
+    #   name: "OpenRouter"
+    #   type: openai
+    #   enabled: true
+    #   priority: 4
+    #   base_url: https://openrouter.ai/api/v1
+    #   api_key_env: OPENROUTER_API_KEY
+    #   model: your-model
+
+    # Groq:
+    # groq:
+    #   name: "Groq"
+    #   type: openai
+    #   enabled: true
+    #   priority: 5
+    #   base_url: https://api.groq.com/openai/v1
+    #   api_key_env: GROQ_API_KEY
+    #   model: llama-3.3-70b-versatile
+
+    # Together AI:
+    # together:
+    #   name: "Together AI"
+    #   type: openai
+    #   enabled: true
+    #   priority: 6
+    #   base_url: https://api.together.xyz/v1
+    #   api_key_env: TOGETHER_API_KEY
+    #   model: your-model
+
+    # Fireworks AI:
+    # fireworks:
+    #   name: "Fireworks AI"
+    #   type: openai
+    #   enabled: true
+    #   priority: 7
+    #   base_url: https://api.fireworks.ai/inference/v1
+    #   api_key_env: FIREWORKS_API_KEY
+    #   model: accounts/fireworks/models/your-model
+
+    # DeepSeek:
+    # deepseek:
+    #   name: "DeepSeek"
+    #   type: openai
+    #   enabled: true
+    #   priority: 8
+    #   base_url: https://api.deepseek.com/v1
+    #   api_key_env: DEEPSEEK_API_KEY
+    #   model: deepseek-chat
+
+    # Mistral:
+    # mistral:
+    #   name: "Mistral"
+    #   type: openai
+    #   enabled: true
+    #   priority: 9
+    #   base_url: https://api.mistral.ai/v1
+    #   api_key_env: MISTRAL_API_KEY
+    #   model: mistral-small-latest
+
+    # vLLM or LM Studio (local OpenAI-compatible server):
+    # local-openai:
+    #   name: "Local OpenAI-Compatible Server"
+    #   type: openai
+    #   enabled: true
+    #   priority: 10
+    #   base_url: http://127.0.0.1:8000/v1
+    #   model: your-local-model
+
     # ncloud:
     #   name: "nCloud Backup"
     #   type: openai
