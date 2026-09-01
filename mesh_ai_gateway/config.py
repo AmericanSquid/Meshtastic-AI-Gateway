@@ -144,6 +144,13 @@ def _nonnegative_float(value: Any, path: str, default: float) -> float:
     return float(value)
 
 
+def _boolean(value: Any, path: str, default: bool) -> bool:
+    value = default if value is None else value
+    if not isinstance(value, bool):
+        raise ConfigError(f"{path} must be true or false")
+    return value
+
+
 def _parse_retry(raw: dict[str, Any]) -> RetryConfig:
     return RetryConfig(
         attempts=_positive_int(raw.get("attempts"), "mesh.reconnect.attempts", 3),
@@ -158,9 +165,7 @@ def _parse_retry(raw: dict[str, Any]) -> RetryConfig:
 def load_config(path: str | Path | None = None) -> AppConfig:
     source = Path(path).expanduser() if path else default_config_path()
     if not source.exists():
-        raise ConfigError(
-            f"config not found: {source}. Run 'mesh-ai-gateway config init' first."
-        )
+        raise ConfigError(f"config not found: {source}. Run 'mesh-ai-gateway config init' first.")
     try:
         raw = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
@@ -219,9 +224,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         item = _mapping(value, f"ai.providers.{provider_id}")
         ptype = str(item.get("type", "")).lower()
         if ptype not in {"ollama", "openai", "hermes"}:
-            raise ConfigError(
-                f"ai.providers.{provider_id}.type must be ollama, openai, or hermes"
-            )
+            raise ConfigError(f"ai.providers.{provider_id}.type must be ollama, openai, or hermes")
         options = item.get("options") or {}
         if not isinstance(options, dict):
             raise ConfigError(f"ai.providers.{provider_id}.options must be a mapping")
@@ -229,7 +232,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
             provider_id=provider_id,
             name=str(item.get("name", provider_id)),
             type=ptype,
-            enabled=bool(item.get("enabled", True)),
+            enabled=_boolean(item.get("enabled"), f"ai.providers.{provider_id}.enabled", True),
             priority=_positive_int(
                 item.get("priority"), f"ai.providers.{provider_id}.priority", 100
             ),
@@ -258,9 +261,7 @@ def load_config(path: str | Path | None = None) -> AppConfig:
     bridge_raw = _mapping(root.get("bridge"), "bridge")
     bridge = BridgeConfig(
         chunk_bytes=_positive_int(bridge_raw.get("chunk_bytes"), "bridge.chunk_bytes", 180),
-        chunk_delay=_nonnegative_float(
-            bridge_raw.get("chunk_delay"), "bridge.chunk_delay", 1.0
-        ),
+        chunk_delay=_nonnegative_float(bridge_raw.get("chunk_delay"), "bridge.chunk_delay", 1.0),
         response_max_bytes=_positive_int(
             bridge_raw.get("response_max_bytes"), "bridge.response_max_bytes", 600
         ),
@@ -299,4 +300,91 @@ def load_config(path: str | Path | None = None) -> AppConfig:
 
 
 def example_config() -> str:
-    return """# Mesh AI Gateway configuration\nmesh:\n  transport: tcp\n\n  tcp:\n    host: 192.168.1.80\n    port: 4403\n\n  ble:\n    address: null\n\n  serial:\n    port: null\n\n  channel: 0\n\n  reconnect:\n    attempts: 3\n    timeout: 10\n    delay: 3\n    retry_after_failure: 30\n\nai:\n  mode: auto\n\n  request:\n    attempts_per_provider: 2\n    timeout: 20\n\n  providers:\n    local:\n      name: \"Lil Local Guy\"\n      type: ollama\n      enabled: true\n      priority: 1\n      host: http://127.0.0.1:11434\n      model: qwen3:8b\n      keep_alive: 30m\n      options:\n        temperature: 0.7\n        num_ctx: 8192\n        num_predict: 180\n\n    # hf:\n    #   name: \"HF Backup\"\n    #   type: openai\n    #   enabled: true\n    #   priority: 2\n    #   base_url: https://router.huggingface.co/v1\n    #   api_key_env: HF_TOKEN\n    #   model: your-model\n\n    # ncloud:\n    #   name: \"nCloud Backup\"\n    #   type: openai\n    #   enabled: true\n    #   priority: 3\n    #   base_url: https://your-ncloud-endpoint.example/v1\n    #   api_key_env: NCLOUD_API_KEY\n    #   model: your-model\n\n    # hermes:\n    #   name: \"Hermes\"\n    #   type: hermes\n    #   enabled: false\n    #   priority: 10\n    #   command: hermes\n\nbridge:\n  chunk_bytes: 180\n  chunk_delay: 1.0\n  response_max_bytes: 600\n  history_messages: 12\n  queue_size: 50\n  max_concurrent_requests: 2\n\n  system_prompt: |\n    You are communicating over Meshtastic.\n    Keep responses concise and appropriate for a low-bandwidth radio connection.\n\nlogging:\n  level: INFO\n  retain_lines: 1000\n\n# ipc:\n#   socket_path: /run/user/1000/mesh-ai-gateway/control.sock\n"""
+    return """\
+# Mesh AI Gateway configuration
+mesh:
+  transport: tcp
+
+  tcp:
+    host: 192.168.1.80
+    port: 4403
+
+  ble:
+    address: null
+
+  serial:
+    port: null
+
+  channel: 0
+
+  reconnect:
+    attempts: 3
+    timeout: 10
+    delay: 3
+    retry_after_failure: 30
+
+ai:
+  mode: auto
+
+  request:
+    attempts_per_provider: 2
+    timeout: 20
+
+  providers:
+    local:
+      name: "Lil Local Guy"
+      type: ollama
+      enabled: true
+      priority: 1
+      host: http://127.0.0.1:11434
+      model: qwen3:8b
+      keep_alive: 30m
+      options:
+        temperature: 0.7
+        num_ctx: 8192
+        num_predict: 180
+
+    # hf:
+    #   name: "HF Backup"
+    #   type: openai
+    #   enabled: true
+    #   priority: 2
+    #   base_url: https://router.huggingface.co/v1
+    #   api_key_env: HF_TOKEN
+    #   model: your-model
+
+    # ncloud:
+    #   name: "nCloud Backup"
+    #   type: openai
+    #   enabled: true
+    #   priority: 3
+    #   base_url: https://your-ncloud-endpoint.example/v1
+    #   api_key_env: NCLOUD_API_KEY
+    #   model: your-model
+
+    # hermes:
+    #   name: "Hermes"
+    #   type: hermes
+    #   enabled: false
+    #   priority: 10
+    #   command: hermes
+
+bridge:
+  chunk_bytes: 180
+  chunk_delay: 1.0
+  response_max_bytes: 600
+  history_messages: 12
+  queue_size: 50
+  max_concurrent_requests: 2
+
+  system_prompt: |
+    You are communicating over Meshtastic.
+    Keep responses concise and appropriate for a low-bandwidth radio connection.
+
+logging:
+  level: INFO
+  retain_lines: 1000
+
+# ipc:
+#   socket_path: /run/user/1000/mesh-ai-gateway/control.sock
+"""

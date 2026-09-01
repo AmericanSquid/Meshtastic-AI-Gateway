@@ -76,8 +76,7 @@ class TUI:
 
             self.draw_line(
                 2,
-                f"Daemon : RUNNING  pid={daemon['pid']}  "
-                f"uptime={daemon['uptime_seconds']}s",
+                f"Daemon : RUNNING  pid={daemon['pid']}  uptime={daemon['uptime_seconds']}s",
             )
 
             mesh_detail = f"{mesh['transport']} {mesh['endpoint']}"
@@ -88,15 +87,10 @@ class TUI:
 
             if mesh.get("last_error"):
                 retry = mesh.get("next_retry_seconds")
-                retry_text = (
-                    f"; retry in {retry}s"
-                    if retry is not None
-                    else ""
-                )
+                retry_text = f"; retry in {retry}s" if retry is not None else ""
                 self.draw_line(
                     4,
-                    f"         last error: "
-                    f"{mesh['last_error']}{retry_text}",
+                    f"         last error: {mesh['last_error']}{retry_text}",
                 )
             else:
                 self.draw_line(
@@ -113,35 +107,26 @@ class TUI:
                 f"Active Provider  : {active_name}",
             )
 
-            providers = " -> ".join(
-                provider["name"]
-                for provider in ai["providers"]
-            )
+            providers = " -> ".join(provider["name"] for provider in ai["providers"])
             self.draw_line(
                 7,
                 f"Routing Priority : {providers}",
             )
 
             if ai.get("hermes_enabled"):
-                hermes_status = (
-                    "SELECTED"
-                    if ai.get("hermes_selected")
-                    else "ENABLED"
-                )
+                hermes_status = "SELECTED" if ai.get("hermes_selected") else "ENABLED"
             else:
                 hermes_status = "DISABLED"
 
             self.draw_line(7, f"Hermes : {hermes_status}")
             self.draw_line(
                 8,
-                f"Queue  : {daemon['queue']['size']}/"
-                f"{daemon['queue']['capacity']}",
+                f"Queue  : {daemon['queue']['size']}/{daemon['queue']['capacity']}",
             )
         else:
             self.draw_line(
                 2,
-                f"Daemon : STOPPED/UNREACHABLE  "
-                f"systemd={service['active']}",
+                f"Daemon : STOPPED/UNREACHABLE  systemd={service['active']}",
             )
             self.draw_line(3, f"Socket : {self.socket_path}")
             self.draw_line(
@@ -157,8 +142,7 @@ class TUI:
 
         self.draw_line(
             9,
-            "[S] Start/Stop Daemon  [R] Restart  "
-            "[M] Reconnect Mesh  [P] Providers",
+            "[S] Start/Stop Daemon  [R] Restart  [M] Reconnect Mesh  [P] Providers",
         )
         self.draw_line(
             10,
@@ -207,11 +191,7 @@ class TUI:
         self.draw_line(0, "NODES  [Esc/N] back")
         self.draw_line(1, "=" * 72)
 
-        nodes = (
-            response.get("nodes", [])
-            if response.get("ok")
-            else []
-        )
+        nodes = response.get("nodes", []) if response.get("ok") else []
 
         if not response.get("ok"):
             self.draw_line(
@@ -229,11 +209,7 @@ class TUI:
             nodes[:available_rows],
             start=2,
         ):
-            label = (
-                node.get("long")
-                or node.get("short")
-                or "?"
-            )
+            label = node.get("long") or node.get("short") or "?"
             self.draw_line(
                 row,
                 f"{node.get('id', '?'):12} "
@@ -247,8 +223,7 @@ class TUI:
 
         self.draw_line(
             0,
-            "PROVIDERS  [0] Auto  [1-9] Select  "
-            "[T] Test  [Esc/P] back",
+            "PROVIDERS  [0] Auto  [1-9] Select  [T] Test  [Esc/P] back",
         )
         self.draw_line(1, "=" * 72)
 
@@ -268,15 +243,8 @@ class TUI:
             response["providers"][:9],
             start=1,
         ):
-            marker = (
-                "*"
-                if response.get("active") == provider["id"]
-                else " "
-            )
-            detail = (
-                provider.get("last_error")
-                or provider.get("status")
-            )
+            marker = "*" if response.get("active") == provider["id"] else " "
+            detail = provider.get("last_error") or provider.get("status")
 
             self.draw_line(
                 index + 1,
@@ -292,8 +260,7 @@ class TUI:
 
         self.draw_line(
             0,
-            "MODULES  [1-9] Open/Start  "
-            "[K] Stop last module  [Esc/U] back",
+            "MODULES  [1-9] Open/Start  [K] Stop last module  [Esc/U] back",
         )
         self.draw_line(1, "=" * 72)
 
@@ -309,22 +276,12 @@ class TUI:
             start=1,
         ):
             module = self.modules.get(module_id)
-            marker = (
-                "*"
-                if module_id == self.last_module_id
-                else " "
-            )
-            command = " ".join(
-                str(part)
-                for part in module.spec.command
-            )
+            marker = "*" if module_id == self.last_module_id else " "
+            command = " ".join(str(part) for part in module.spec.command)
 
             self.draw_line(
                 index + 1,
-                f"[{index}] {marker} "
-                f"{module.spec.name:24} "
-                f"{module.status:12} "
-                f"{command}",
+                f"[{index}] {marker} {module.spec.name:24} {module.status:12} {command}",
             )
 
         if self.message:
@@ -339,9 +296,7 @@ class TUI:
             self.screen = "modules"
             return
 
-        module = self.modules.get(
-            self.active_module_id
-        )
+        module = self.modules.get(self.active_module_id)
         module.poll()
 
         height, width = self.stdscr.getmaxyx()
@@ -353,10 +308,7 @@ class TUI:
 
         self.draw_line(
             0,
-            f"{module.spec.name}  "
-            f"[{module.status}]  "
-            "[F10] Back  "
-            "[Ctrl+C/I] Interrupt",
+            f"{module.spec.name}  [{module.status}]  [F10] Back  [Ctrl+C/I] Interrupt",
         )
         self.draw_line(1, "=" * 72)
 
@@ -391,10 +343,7 @@ class TUI:
         result = self.ipc("reload_config")
 
         self.message = (
-            "Config reloaded."
-            if result.get("ok")
-            else f"Config error: "
-            f"{result.get('error')}"
+            "Config reloaded." if result.get("ok") else f"Config error: {result.get('error')}"
         )
 
     def toggle_service(self) -> None:
@@ -403,11 +352,7 @@ class TUI:
 
         if state["running"]:
             ok, detail = service_action("stop")
-            self.message = (
-                f"systemd stop: "
-                f"{'ok' if ok else 'failed'} "
-                f"{detail}"
-            ).strip()
+            self.message = (f"systemd stop: {'ok' if ok else 'failed'} {detail}").strip()
         elif daemon.get("ok"):
             result = self.ipc("shutdown")
             self.message = (
@@ -420,11 +365,7 @@ class TUI:
             )
         else:
             ok, detail = service_action("start")
-            self.message = (
-                f"systemd start: "
-                f"{'ok' if ok else 'failed'} "
-                f"{detail}"
-            ).strip()
+            self.message = (f"systemd start: {'ok' if ok else 'failed'} {detail}").strip()
 
         time.sleep(0.4)
 
@@ -438,19 +379,12 @@ class TUI:
             if not module.running:
                 module.start()
 
-            self.active_module_id = (
-                module.spec.module_id
-            )
-            self.last_module_id = (
-                module.spec.module_id
-            )
+            self.active_module_id = module.spec.module_id
+            self.last_module_id = module.spec.module_id
             self.screen = "module_terminal"
             self.message = ""
         except Exception as exc:
-            self.message = (
-                f"Could not start "
-                f"{module.spec.name}: {exc}"
-            )
+            self.message = f"Could not start {module.spec.name}: {exc}"
 
     def _module_key_bytes(
         self,
@@ -518,9 +452,7 @@ class TUI:
             self.screen = "modules"
             return True
 
-        module = self.modules.get(
-            self.active_module_id
-        )
+        module = self.modules.get(self.active_module_id)
 
         if key in (
             ord("i"),
@@ -538,9 +470,7 @@ class TUI:
 
     def handle_key(self, key: int) -> bool:
         if self.screen == "module_terminal":
-            return self.handle_module_terminal_key(
-                key
-            )
+            return self.handle_module_terminal_key(key)
 
         if key in (
             ord("q"),
@@ -549,15 +479,9 @@ class TUI:
             running = self.modules.running()
 
             if running:
-                names = ", ".join(
-                    module.spec.name
-                    for module in running
-                )
+                names = ", ".join(module.spec.name for module in running)
                 self.message = (
-                    f"Module still running: "
-                    f"{names}. Stop it from "
-                    "[U] Modules before "
-                    "detaching TUI."
+                    f"Module still running: {names}. Stop it from [U] Modules before detaching TUI."
                 )
                 return True
 
@@ -578,22 +502,14 @@ class TUI:
                 ord("r"),
                 ord("R"),
             ):
-                ok, detail = service_action(
-                    "restart"
-                )
-                self.message = (
-                    f"systemd restart: "
-                    f"{'ok' if ok else 'failed'} "
-                    f"{detail}"
-                ).strip()
+                ok, detail = service_action("restart")
+                self.message = (f"systemd restart: {'ok' if ok else 'failed'} {detail}").strip()
 
             elif key in (
                 ord("m"),
                 ord("M"),
             ):
-                result = self.ipc(
-                    "reconnect_mesh"
-                )
+                result = self.ipc("reconnect_mesh")
                 self.message = (
                     "Mesh reconnect requested."
                     if result.get("ok")
@@ -633,21 +549,15 @@ class TUI:
             ):
                 self.screen = "modules"
 
-        elif (
-            self.screen == "logs"
-            and key in (
-                ord("l"),
-                ord("L"),
-            )
+        elif self.screen == "logs" and key in (
+            ord("l"),
+            ord("L"),
         ):
             self.screen = "dashboard"
 
-        elif (
-            self.screen == "nodes"
-            and key in (
-                ord("n"),
-                ord("N"),
-            )
+        elif self.screen == "nodes" and key in (
+            ord("n"),
+            ord("N"),
         ):
             self.screen = "dashboard"
 
@@ -673,9 +583,7 @@ class TUI:
                 )
 
             elif ord("1") <= key <= ord("9"):
-                response = self.ipc(
-                    "providers"
-                )
+                response = self.ipc("providers")
                 index = key - ord("1")
                 providers = (
                     response.get(
@@ -687,9 +595,7 @@ class TUI:
                 )
 
                 if index < len(providers):
-                    provider_id = (
-                        providers[index]["id"]
-                    )
+                    provider_id = providers[index]["id"]
                     result = self.ipc(
                         "set_provider",
                         provider=provider_id,
@@ -707,9 +613,7 @@ class TUI:
                 ord("t"),
                 ord("T"),
             ):
-                self.message = (
-                    "Testing providers..."
-                )
+                self.message = "Testing providers..."
                 self.stdscr.refresh()
 
                 result = self.ipc(
@@ -719,10 +623,8 @@ class TUI:
 
                 if result.get("ok"):
                     bits = [
-                        f"{provider_id}="
-                        f"{'ok' if info['ok'] else 'fail'}"
-                        for provider_id, info
-                        in result["results"].items()
+                        f"{provider_id}={'ok' if info['ok'] else 'fail'}"
+                        for provider_id, info in result["results"].items()
                     ]
                     self.message = "  ".join(bits)
                 else:
@@ -739,35 +641,22 @@ class TUI:
                 self.screen = "dashboard"
 
             elif ord("1") <= key <= ord("9"):
-                self.open_module(
-                    key - ord("1")
-                )
+                self.open_module(key - ord("1"))
 
             elif key in (
                 ord("k"),
                 ord("K"),
             ):
                 if self.last_module_id is None:
-                    self.message = (
-                        "No module has been "
-                        "opened yet."
-                    )
+                    self.message = "No module has been opened yet."
                 else:
-                    module = self.modules.get(
-                        self.last_module_id
-                    )
+                    module = self.modules.get(self.last_module_id)
 
                     if module.running:
                         module.terminate()
-                        self.message = (
-                            f"Stopping "
-                            f"{module.spec.name}..."
-                        )
+                        self.message = f"Stopping {module.spec.name}..."
                     else:
-                        self.message = (
-                            f"{module.spec.name} "
-                            "is not running."
-                        )
+                        self.message = f"{module.spec.name} is not running."
 
         return True
 
@@ -795,10 +684,7 @@ class TUI:
             self.stdscr.refresh()
             key = self.stdscr.getch()
 
-            if (
-                key != -1
-                and not self.handle_key(key)
-            ):
+            if key != -1 and not self.handle_key(key):
                 break
 
 

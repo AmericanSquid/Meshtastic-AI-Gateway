@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+from pathlib import Path
 
 import httpx
 
@@ -34,7 +35,9 @@ class OllamaProvider(AIProvider):
                 raise ProviderError("Ollama response did not contain message.content")
             return text.strip()
         except httpx.HTTPStatusError as exc:
-            raise ProviderError(f"HTTP {exc.response.status_code}: {exc.response.text[:160]}") from exc
+            raise ProviderError(
+                f"HTTP {exc.response.status_code}: {exc.response.text[:160]}"
+            ) from exc
         except httpx.HTTPError as exc:
             raise ProviderError(str(exc)) from exc
 
@@ -49,7 +52,12 @@ class OllamaProvider(AIProvider):
     async def list_models(self) -> list[str]:
         response = await self.client.get("api/tags", timeout=5.0)
         response.raise_for_status()
-        return [str(item.get("name")) for item in response.json().get("models", []) if item.get("name")]
+        return [
+            str(item.get("name")) for item in response.json().get("models", []) if item.get("name")
+        ]
+
+    async def aclose(self) -> None:
+        await self.client.aclose()
 
 
 class OpenAICompatibleProvider(AIProvider):
@@ -77,10 +85,14 @@ class OpenAICompatibleProvider(AIProvider):
             choices = data.get("choices") or []
             text = choices[0].get("message", {}).get("content") if choices else None
             if not isinstance(text, str):
-                raise ProviderError("OpenAI-compatible response did not contain choices[0].message.content")
+                raise ProviderError(
+                    "OpenAI-compatible response did not contain choices[0].message.content"
+                )
             return text.strip()
         except httpx.HTTPStatusError as exc:
-            raise ProviderError(f"HTTP {exc.response.status_code}: {exc.response.text[:160]}") from exc
+            raise ProviderError(
+                f"HTTP {exc.response.status_code}: {exc.response.text[:160]}"
+            ) from exc
         except httpx.HTTPError as exc:
             raise ProviderError(str(exc)) from exc
 
@@ -96,6 +108,9 @@ class OpenAICompatibleProvider(AIProvider):
         response = await self.client.get("models", headers=self._headers(), timeout=5.0)
         response.raise_for_status()
         return [str(item.get("id")) for item in response.json().get("data", []) if item.get("id")]
+
+    async def aclose(self) -> None:
+        await self.client.aclose()
 
 
 class HermesProvider(AIProvider):
@@ -134,5 +149,13 @@ class HermesProvider(AIProvider):
         return stdout.decode("utf-8", "replace").strip()
 
     async def healthcheck(self) -> tuple[bool, str]:
-        path = shutil.which(self.config.command)
-        return (True, path) if path else (False, f"{self.config.command} not found in PATH")
+        command = Path(self.config.command).expanduser()
+        if command.is_absolute() or command.parent != Path("."):
+            path = command.resolve()
+        else:
+            found = shutil.which(self.config.command)
+            path = Path(found).resolve() if found else None
+
+        if path is None or not path.is_file() or not os.access(path, os.X_OK):
+            return False, f"Hermes executable not found or not executable: {self.config.command}"
+        return True, str(path)

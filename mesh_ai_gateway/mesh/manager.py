@@ -38,9 +38,7 @@ class MeshManager:
         self.lost_event = asyncio.Event()
         self.force_reconnect_event = asyncio.Event()
 
-        self.detection_sensor_packets: (
-            asyncio.Queue[dict]
-        ) = asyncio.Queue(maxsize=1)
+        self.detection_sensor_packets: asyncio.Queue[dict] = asyncio.Queue(maxsize=1)
 
         self._subscribed = False
         self.status = "disconnected"
@@ -50,19 +48,12 @@ class MeshManager:
 
     def endpoint(self) -> str:
         if self.config.transport == "tcp":
-            return (
-                f"{self.config.tcp.host}:"
-                f"{self.config.tcp.port}"
-            )
+            return f"{self.config.tcp.host}:{self.config.tcp.port}"
 
         if self.config.transport == "ble":
-            return str(
-                self.config.ble.address
-            )
+            return str(self.config.ble.address)
 
-        return str(
-            self.config.serial.port
-        )
+        return str(self.config.serial.port)
 
     def _subscribe(self) -> None:
         if self._subscribed:
@@ -105,7 +96,7 @@ class MeshManager:
                 "meshtastic.connection.lost",
             )
         except Exception:
-            pass
+            log.debug("Could not unsubscribe Meshtastic callbacks", exc_info=True)
 
         self._subscribed = False
 
@@ -179,11 +170,7 @@ class MeshManager:
             ),
         )
 
-        self.loop.call_soon_threadsafe(
-            lambda: asyncio.create_task(
-                self.on_message(message)
-            )
-        )
+        self.loop.call_soon_threadsafe(lambda: asyncio.create_task(self.on_message(message)))
 
     def _buffer_detection_sensor(
         self,
@@ -195,20 +182,14 @@ class MeshManager:
             except asyncio.QueueEmpty:
                 pass
 
-        self.detection_sensor_packets.put_nowait(
-            packet
-        )
+        self.detection_sensor_packets.put_nowait(packet)
 
     def _on_detection_sensor(
         self,
         packet,
         interface=None,
     ):
-        if (
-            not self.loop
-            or interface is not self.interface
-            or not isinstance(packet, dict)
-        ):
+        if not self.loop or interface is not self.interface or not isinstance(packet, dict):
             return
 
         my_info = getattr(
@@ -222,10 +203,7 @@ class MeshManager:
             None,
         )
 
-        if (
-            local_node_num is None
-            or packet.get("from") != local_node_num
-        ):
+        if local_node_num is None or packet.get("from") != local_node_num:
             return
 
         decoded = packet.get("decoded") or {}
@@ -249,9 +227,7 @@ class MeshManager:
         interface=None,
     ):
         if self.loop:
-            self.loop.call_soon_threadsafe(
-                self.lost_event.set
-            )
+            self.loop.call_soon_threadsafe(self.lost_event.set)
 
     def _preflight_tcp(self) -> None:
         with socket.create_connection(
@@ -259,9 +235,7 @@ class MeshManager:
                 self.config.tcp.host,
                 self.config.tcp.port,
             ),
-            timeout=(
-                self.config.reconnect.timeout
-            ),
+            timeout=(self.config.reconnect.timeout),
         ):
             return
 
@@ -309,9 +283,7 @@ class MeshManager:
         interface = self.interface
         self.interface = None
 
-        while (
-            not self.detection_sensor_packets.empty()
-        ):
+        while not self.detection_sensor_packets.empty():
             try:
                 self.detection_sensor_packets.get_nowait()
             except asyncio.QueueEmpty:
@@ -319,14 +291,12 @@ class MeshManager:
 
         if interface is not None:
             try:
-                await asyncio.to_thread(
-                    interface.close
-                )
+                await asyncio.to_thread(interface.close)
             except Exception as exc:
                 log.debug(
-                    "Error closing Meshtastic "
-                    "interface: %s",
+                    "Error closing Meshtastic interface: %s",
                     exc,
+                    exc_info=True,
                 )
 
     async def connect_cycle(self) -> bool:
@@ -345,8 +315,7 @@ class MeshManager:
             self.next_retry_at = None
 
             log.info(
-                "Connecting to Meshtastic via "
-                "%s %s, attempt %s/%s",
+                "Connecting to Meshtastic via %s %s, attempt %s/%s",
                 self.config.transport,
                 self.endpoint(),
                 attempt,
@@ -354,17 +323,12 @@ class MeshManager:
             )
 
             try:
-                self.interface = (
-                    await asyncio.to_thread(
-                        self._connect_sync
-                    )
-                )
+                self.interface = await asyncio.to_thread(self._connect_sync)
                 self.status = "connected"
                 self.attempt = 0
 
                 log.info(
-                    "Meshtastic connected via "
-                    "%s %s",
+                    "Meshtastic connected via %s %s",
                     self.config.transport,
                     self.endpoint(),
                 )
@@ -375,8 +339,7 @@ class MeshManager:
                 self.last_error = str(exc)
 
                 log.warning(
-                    "Meshtastic attempt %s/%s "
-                    "failed: %s",
+                    "Meshtastic attempt %s/%s failed: %s",
                     attempt,
                     retry.attempts,
                     exc,
@@ -385,10 +348,7 @@ class MeshManager:
                 await self._close_interface()
 
                 if attempt < retry.attempts:
-                    self.next_retry_at = (
-                        time.time()
-                        + retry.delay
-                    )
+                    self.next_retry_at = time.time() + retry.delay
 
                     try:
                         await asyncio.wait_for(
@@ -406,31 +366,22 @@ class MeshManager:
 
         try:
             while not self.stop_event.is_set():
-                connected = (
-                    await self.connect_cycle()
-                )
+                connected = await self.connect_cycle()
 
                 if not connected:
                     self.status = "disconnected"
-                    wait = (
-                        self.config.reconnect
-                        .retry_after_failure
-                    )
-                    self.next_retry_at = (
-                        time.time() + wait
-                    )
+                    wait = self.config.reconnect.retry_after_failure
+                    self.next_retry_at = time.time() + wait
 
                     log.warning(
-                        "Mesh unavailable after "
-                        "%s attempts; retrying in %.0fs",
+                        "Mesh unavailable after %s attempts; retrying in %.0fs",
                         self.config.reconnect.attempts,
                         wait,
                     )
 
                     try:
                         await asyncio.wait_for(
-                            self.force_reconnect_event
-                            .wait(),
+                            self.force_reconnect_event.wait(),
                             timeout=wait,
                         )
                     except asyncio.TimeoutError:
@@ -442,15 +393,9 @@ class MeshManager:
                 self.lost_event.clear()
                 self.force_reconnect_event.clear()
 
-                lost_task = asyncio.create_task(
-                    self.lost_event.wait()
-                )
-                force_task = asyncio.create_task(
-                    self.force_reconnect_event.wait()
-                )
-                stop_task = asyncio.create_task(
-                    self.stop_event.wait()
-                )
+                lost_task = asyncio.create_task(self.lost_event.wait())
+                force_task = asyncio.create_task(self.force_reconnect_event.wait())
+                stop_task = asyncio.create_task(self.stop_event.wait())
 
                 done, pending = await asyncio.wait(
                     {
@@ -458,25 +403,16 @@ class MeshManager:
                         force_task,
                         stop_task,
                     },
-                    return_when=(
-                        asyncio.FIRST_COMPLETED
-                    ),
+                    return_when=(asyncio.FIRST_COMPLETED),
                 )
 
                 for task in pending:
                     task.cancel()
 
-                if (
-                    stop_task in done
-                    and self.stop_event.is_set()
-                ):
+                if stop_task in done and self.stop_event.is_set():
                     break
 
-                reason = (
-                    "manual reconnect"
-                    if force_task in done
-                    else "connection lost"
-                )
+                reason = "manual reconnect" if force_task in done else "connection lost"
 
                 self.status = "disconnected"
                 self.last_error = reason
@@ -507,13 +443,8 @@ class MeshManager:
         destination: str | int | None,
         channel: int,
     ) -> None:
-        if (
-            self.status != "connected"
-            or self.interface is None
-        ):
-            raise RuntimeError(
-                "Meshtastic is not connected"
-            )
+        if self.status != "connected" or self.interface is None:
+            raise RuntimeError("Meshtastic is not connected")
 
         kwargs = {
             "channelIndex": channel,
@@ -564,37 +495,27 @@ class MeshManager:
 
             for node_id, node in nodes.items():
                 user = node.get("user") or {}
-                metrics = (
-                    node.get("deviceMetrics")
-                    or {}
-                )
+                metrics = node.get("deviceMetrics") or {}
 
                 result.append(
                     {
                         "id": node_id,
-                        "short": user.get(
-                            "shortName"
-                        ),
-                        "long": user.get(
-                            "longName"
-                        ),
+                        "short": user.get("shortName"),
+                        "long": user.get("longName"),
                         "snr": node.get("snr"),
-                        "battery": metrics.get(
-                            "batteryLevel"
-                        ),
+                        "battery": metrics.get("batteryLevel"),
                     }
                 )
         except Exception as exc:
             log.debug(
                 "Could not snapshot nodes: %s",
                 exc,
+                exc_info=True,
             )
 
         return sorted(
             result,
-            key=lambda item: (
-                item.get("id") or ""
-            ),
+            key=lambda item: item.get("id") or "",
         )
 
     def snapshot(self) -> dict:
@@ -603,10 +524,7 @@ class MeshManager:
         if self.next_retry_at:
             next_retry = max(
                 0,
-                int(
-                    self.next_retry_at
-                    - time.time()
-                ),
+                int(self.next_retry_at - time.time()),
             )
 
         return {
@@ -614,9 +532,7 @@ class MeshManager:
             "transport": self.config.transport,
             "endpoint": self.endpoint(),
             "attempt": self.attempt,
-            "attempts": (
-                self.config.reconnect.attempts
-            ),
+            "attempts": (self.config.reconnect.attempts),
             "last_error": self.last_error,
             "next_retry_seconds": next_retry,
             "nodes": len(self.nodes()),

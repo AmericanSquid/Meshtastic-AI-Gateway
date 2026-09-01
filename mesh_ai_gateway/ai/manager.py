@@ -8,7 +8,7 @@ from typing import Callable
 from ..config import AIConfig, ProviderConfig
 from ..errors import ProviderExhausted
 from .base import AIProvider
-from .providers import HermesProvider, OllamaProvider, OpenAICompatibleProvider
+from .providers import OllamaProvider, OpenAICompatibleProvider
 
 log = logging.getLogger(__name__)
 
@@ -43,16 +43,23 @@ class ProviderManager:
         self.states: dict[str, ProviderState] = {}
         self.manual_provider: str | None = None
         self.active_provider: str | None = None
-        self.reconfigure(config)
+        self.apply_prepared(config, self._build_providers(config))
 
-    def reconfigure(self, config: AIConfig) -> None:
-        previous_manual = self.manual_provider
-        self.config = config
-        self.providers = {
+    def _build_providers(self, config: AIConfig) -> dict[str, AIProvider]:
+        return {
             provider_id: self.provider_factory(provider)
             for provider_id, provider in config.providers.items()
             if provider.enabled and provider.type != "hermes"
         }
+
+    def prepare_reconfigure(self, config: AIConfig) -> dict[str, AIProvider]:
+        return self._build_providers(config)
+
+    def apply_prepared(self, config: AIConfig, providers: dict[str, AIProvider]) -> None:
+        previous_manual = self.manual_provider
+        previous_active = self.active_provider
+        self.config = config
+        self.providers = providers
         self.states = {
             provider_id: ProviderState(
                 provider_id=provider_id,
@@ -63,7 +70,25 @@ class ProviderManager:
             for provider_id, provider in self.providers.items()
         }
         self.manual_provider = previous_manual if previous_manual in self.providers else None
-        self.active_provider = None
+        self.active_provider = previous_active if previous_active in self.providers else None
+
+    async def close_providers(self, providers: dict[str, AIProvider]) -> None:
+        results = await asyncio.gather(
+            *(provider.aclose() for provider in providers.values()),
+            return_exceptions=True,
+        )
+        for provider_id, result in zip(providers, results):
+            if isinstance(result, Exception):
+                log.warning("Could not close provider %s: %s", provider_id, result)
+
+    async def discard_prepared(self, providers: dict[str, AIProvider]) -> None:
+        await self.close_providers(providers)
+
+    async def reconfigure(self, config: AIConfig) -> None:
+        providers = self.prepare_reconfigure(config)
+        previous = self.providers
+        await self.close_providers(previous)
+        self.apply_prepared(config, providers)
 
     def ordered_ids(self) -> list[str]:
         return sorted(

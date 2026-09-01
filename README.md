@@ -154,7 +154,6 @@ The installer also accepts `service install --system` for a system unit; use `--
 ```text
 mesh_ai_gateway/       Package: CLI, daemon, mesh, providers, IPC, and TUI
 config.example.yaml    Complete example configuration
-hermes_worker.py       JSON-line worker used by the Hermes provider
 tests/                 Configuration, provider, session, and UTF-8 utility tests
 ```
 

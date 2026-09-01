@@ -29,8 +29,13 @@ class IPCServer:
             probe.settimeout(0.5)
             try:
                 probe.connect(str(self.socket_path))
-            except OSError:
+            except (ConnectionRefusedError, FileNotFoundError):
+                log.info("Removing stale control socket at %s", self.socket_path)
                 self.socket_path.unlink(missing_ok=True)
+            except OSError as exc:
+                raise RuntimeError(
+                    f"cannot probe existing control socket {self.socket_path}: {exc}"
+                ) from exc
             else:
                 raise RuntimeError(
                     f"another gateway daemon is already listening at {self.socket_path}"
@@ -49,11 +54,12 @@ class IPCServer:
                 try:
                     await writer.wait_closed()
                 except OSError:
-                    pass
+                    log.debug("IPC client disconnected while closing connection", exc_info=True)
                 return
             request = json.loads(line.decode("utf-8"))
             response = await self.handler(request)
         except Exception as exc:
+            log.debug("IPC request failed", exc_info=True)
             response = {"ok": False, "error": str(exc)}
         writer.write((json.dumps(response, ensure_ascii=False) + "\n").encode("utf-8"))
         try:
@@ -63,7 +69,7 @@ class IPCServer:
             try:
                 await writer.wait_closed()
             except OSError:
-                pass
+                log.debug("IPC client disconnected while closing connection", exc_info=True)
 
     async def stop(self) -> None:
         if self.server:

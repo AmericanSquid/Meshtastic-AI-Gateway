@@ -43,7 +43,9 @@ class MessageRouter:
     async def enqueue(self, message: MeshMessage) -> None:
         try:
             self.queue.put_nowait(message)
-            log.info("RX sender=%s channel=%s text=%r", message.sender, message.channel, message.text)
+            log.info(
+                "RX sender=%s channel=%s text=%r", message.sender, message.channel, message.text
+            )
         except asyncio.QueueFull:
             log.warning("Incoming queue full; dropping message from %s", message.sender)
             try:
@@ -53,7 +55,11 @@ class MessageRouter:
                     message.channel,
                 )
             except Exception:
-                pass
+                log.debug(
+                    "Could not send queue-full response to %s",
+                    message.sender,
+                    exc_info=True,
+                )
 
     async def start(self) -> None:
         self.stopped = False
@@ -83,55 +89,8 @@ class MessageRouter:
     def _reply_destination(self, message: MeshMessage) -> str | int:
         return message.sender if message.is_direct else 0xFFFFFFFF
 
-    async def _command(self, message: MeshMessage) -> str | None:
-        response = await handle_mesh_command(self, message)
-        if response is not None:
-            return response
-
-        raw = message.text.strip()
-        if not raw.startswith("!"):
-            return None
-        parts = raw.split()
-        command = parts[0].lower()
-        key = self._session_key(message)
-        if command == "!reset":
-            self.sessions.reset(key)
-            return "Conversation reset."
-        if command == "!status":
-            mesh = self.mesh.snapshot()
-            ai = self.providers.snapshot()
-            active = ai.get("active") or ai.get("selected") or "none"
-            return f"Mesh: {mesh['status']} ({mesh['transport']}). AI: {active}."
-        if command == "!provider":
-            if len(parts) == 1:
-                snapshot = self.providers.snapshot()
-                choices = [item["id"] for item in snapshot["providers"]]
-
-                if self.hermes is not None:
-                    choices.append("hermes")
-
-                selected = "hermes" if self.hermes_selected else snapshot["selected"]
-
-                return f"Provider: {selected}. Available: auto, {', '.join(choices)}"
-
-            target = parts[1]
-
-            if target == "hermes":
-                if self.hermes is None:
-                    return "Hermes is not enabled."
-
-                self.hermes_selected = True
-                self.providers.set_manual(None)
-                return "Hermes agent selected."
-
-            self.hermes_selected = False
-
-            try:
-                self.providers.set_manual(target)
-                return f"Provider set to {target}."
-            except ValueError as exc:
-                return str(exc)
-        return None
+    async def _command(self, message: MeshMessage) -> str | tuple[str, ...] | None:
+        return await handle_mesh_command(self, message)
 
     async def _send_response(self, message: MeshMessage, response: str) -> None:
         response = truncate_utf8(response, self.config.response_max_bytes)
@@ -201,6 +160,10 @@ class MessageRouter:
                         message.channel,
                     )
                 except Exception:
-                    pass
+                    log.debug(
+                        "Could not send gateway error response to %s",
+                        message.sender,
+                        exc_info=True,
+                    )
             finally:
                 self.queue.task_done()

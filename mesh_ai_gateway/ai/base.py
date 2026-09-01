@@ -27,3 +27,6 @@ class AIProvider(ABC):
 
     async def list_models(self) -> list[str]:
         return []
+
+    async def aclose(self) -> None:
+        """Release resources held by the provider."""

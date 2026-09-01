@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -8,7 +7,7 @@ from pathlib import Path
 from ..paths import env_file_path, systemd_unit_path
 
 SERVICE = "mesh-ai-gateway.service"
-SYSTEM_UNIT = Path("/etc/systemd/system/mesh-ai-gateway.service")
+
 
 def _run(*args: str, check: bool = False) -> subprocess.CompletedProcess:
     command = ["systemctl", *args]
@@ -23,12 +22,16 @@ def _run(*args: str, check: bool = False) -> subprocess.CompletedProcess:
         return subprocess.CompletedProcess(command, 127, stdout="", stderr=str(exc))
 
 
-def _unit_quote(value: Path) -> str:
+def _unit_quote(value: str | Path) -> str:
     text = str(value).replace("\\", "\\\\").replace('"', '\\"')
     return f'"{text}"'
 
+
 def unit_text(config_path: Path, user: str | None = None) -> str:
     user_line = f"User={user}\n" if user else ""
+    python = _unit_quote(Path(sys.executable).resolve())
+    config = _unit_quote(config_path.expanduser().resolve())
+    env_file = env_file_path(config_path).expanduser()
 
     return f"""[Unit]
 Description=Meshtastic AI Gateway
@@ -37,16 +40,17 @@ After=network-online.target
 
 [Service]
 Type=simple
-{user_line}ExecStart="/usr/bin/mesh-ai-gateway daemon --config "{config_path}"
+{user_line}ExecStart={python} -m mesh_ai_gateway daemon --config {config}
 Restart=on-failure
 RestartSec=3
-EnvironmentFile=-{env_file_path(config_path)}
+EnvironmentFile=-{env_file}
 RuntimeDirectory=mesh-ai-gateway
 RuntimeDirectoryMode=0700
 
 [Install]
 WantedBy=default.target
 """
+
 
 def install(
     config_path: Path,
@@ -73,8 +77,7 @@ def install(
 
     if not env.exists():
         env.write_text(
-            "# HF_TOKEN=...\n"
-            "# NCLOUD_API_KEY=...\n",
+            "# HF_TOKEN=...\n# NCLOUD_API_KEY=...\n",
             encoding="utf-8",
         )
         env.chmod(0o600)
@@ -89,11 +92,10 @@ def install(
         result = _run("daemon-reload")
 
     if result.returncode != 0:
-        raise RuntimeError(
-            result.stderr.strip() or "systemctl daemon-reload failed"
-        )
+        raise RuntimeError(result.stderr.strip() or "systemctl daemon-reload failed")
 
     return unit
+
 
 def action(name: str) -> tuple[bool, str]:
     if name not in {"start", "stop", "restart", "enable", "disable"}:

@@ -7,7 +7,6 @@ import signal
 from pathlib import Path
 
 from .ai.manager import ProviderManager
-from .ai.providers import HermesProvider
 from .config import AppConfig, load_config
 from .ipc.server import IPCServer
 from .logging_setup import RingBufferHandler, configure_logging
@@ -49,12 +48,23 @@ class GatewayDaemon:
 
     async def reload_config(self) -> dict:
         candidate = load_config(self.config_path)
-        old_socket = self.config.ipc.socket_path
+        previous = self.config
+        old_socket = previous.ipc.socket_path
+        prepared_providers = self.providers.prepare_reconfigure(candidate.ai)
 
+        try:
+            await self.mesh.reconfigure(candidate.mesh)
+            await self.router.reconfigure(candidate.bridge)
+        except Exception:
+            await self.providers.discard_prepared(prepared_providers)
+            await self.mesh.reconfigure(previous.mesh)
+            await self.router.reconfigure(previous.bridge)
+            raise
+
+        previous_providers = self.providers.providers
+        await self.providers.close_providers(previous_providers)
+        self.providers.apply_prepared(candidate.ai, prepared_providers)
         self.config = candidate
-        self.providers.reconfigure(candidate.ai)
-        await self.mesh.reconfigure(candidate.mesh)
-        await self.router.reconfigure(candidate.bridge)
 
         logging.getLogger().setLevel(
             getattr(
@@ -66,10 +76,7 @@ class GatewayDaemon:
 
         note = None
         if candidate.ipc.socket_path != old_socket:
-            note = (
-                "ipc.socket_path changed; restart daemon "
-                "to move the live socket"
-            )
+            note = "ipc.socket_path changed; restart daemon to move the live socket"
 
         log.info(
             "Configuration reloaded from %s",
@@ -83,11 +90,7 @@ class GatewayDaemon:
     def snapshot(self) -> dict:
         import time
 
-        uptime = (
-            int(time.time() - self.started_at)
-            if self.started_at
-            else 0
-        )
+        uptime = int(time.time() - self.started_at) if self.started_at else 0
 
         return {
             "ok": True,
@@ -97,12 +100,8 @@ class GatewayDaemon:
             "mesh": self.mesh.snapshot(),
             "ai": {
                 **self.providers.snapshot(),
-                "hermes_enabled": (
-                    self.router.hermes is not None
-                ),
-                "hermes_selected": (
-                    self.router.hermes_selected
-                ),
+                "hermes_enabled": (self.router.hermes is not None),
+                "hermes_selected": (self.router.hermes_selected),
             },
             "queue": {
                 "size": self.router.queue.qsize(),
@@ -125,9 +124,7 @@ class GatewayDaemon:
         if command == "logs":
             return {
                 "ok": True,
-                "lines": self.ring.recent(
-                    int(request.get("limit", 100))
-                ),
+                "lines": self.ring.recent(int(request.get("limit", 100))),
             }
 
         if command == "nodes":
@@ -145,16 +142,12 @@ class GatewayDaemon:
         if command == "test_providers":
             return {
                 "ok": True,
-                "results": (
-                    await self.providers.test_all()
-                ),
+                "results": (await self.providers.test_all()),
             }
 
         if command == "next_detection_sensor":
             try:
-                timeout = float(
-                    request.get("timeout", 5.0)
-                )
+                timeout = float(request.get("timeout", 5.0))
             except (TypeError, ValueError):
                 return {
                     "ok": False,
@@ -164,18 +157,11 @@ class GatewayDaemon:
             if timeout <= 0:
                 return {
                     "ok": False,
-                    "error": (
-                        "timeout must be greater than zero"
-                    ),
+                    "error": ("timeout must be greater than zero"),
                 }
 
             try:
-                packet = (
-                    await self.mesh
-                    .next_detection_sensor_packet(
-                        timeout
-                    )
-                )
+                packet = await self.mesh.next_detection_sensor_packet(timeout)
             except asyncio.TimeoutError:
                 return {
                     "ok": False,
@@ -206,26 +192,18 @@ class GatewayDaemon:
             except (TypeError, ValueError):
                 return {
                     "ok": False,
-                    "error": (
-                        "channel must be an integer"
-                    ),
+                    "error": ("channel must be an integer"),
                 }
 
             destination = request.get("destination")
 
-            if (
-                destination is not None
-                and not isinstance(
-                    destination,
-                    (str, int),
-                )
+            if destination is not None and not isinstance(
+                destination,
+                (str, int),
             ):
                 return {
                     "ok": False,
-                    "error": (
-                        "destination must be a "
-                        "string or integer"
-                    ),
+                    "error": ("destination must be a string or integer"),
                 }
 
             await self.mesh.send_text(
@@ -238,9 +216,7 @@ class GatewayDaemon:
 
         if command == "set_provider":
             try:
-                self.providers.set_manual(
-                    request.get("provider")
-                )
+                self.providers.set_manual(request.get("provider"))
                 return {
                     "ok": True,
                     **self.providers.snapshot(),

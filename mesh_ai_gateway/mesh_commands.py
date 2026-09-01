@@ -28,9 +28,12 @@ HELP_PAGES = (
         "!hermes - Hermes agent mode\n"
         "!chat - Return to chat mode\n"
         "!new - Start a new chat\n"
+        "!reset - Reset conversation\n"
+        "!status - Mesh/provider status\n"
         "!restart - Restart gateway"
     ),
 )
+
 
 def _current_provider_id(router: MessageRouter) -> str | None:
     providers = router.providers
@@ -50,7 +53,7 @@ async def _restart_process() -> None:
 async def handle_mesh_command(
     router: MessageRouter,
     message: MeshMessage,
-) -> str | None:
+) -> str | tuple[str, ...] | None:
     raw = message.text.strip()
     if not raw.startswith("!"):
         return None
@@ -73,6 +76,16 @@ async def handle_mesh_command(
             f"Gateway OK | Mesh {mesh['status']} | Chat {ai['mode']} | "
             f"Active {active} | Hermes {hermes}"
         )
+
+    if command == "!reset":
+        router.sessions.reset(router._session_key(message))
+        return "Conversation reset."
+
+    if command == "!status":
+        mesh = router.mesh.snapshot()
+        ai = router.providers.snapshot()
+        active = ai.get("active") or ai.get("selected") or "none"
+        return f"Mesh: {mesh['status']} ({mesh['transport']}). AI: {active}."
 
     if command == "!providers":
         snapshot = router.providers.snapshot()

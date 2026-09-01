@@ -12,6 +12,7 @@ from .ipc.client import request
 from .paths import default_config_path
 from .service import systemd
 
+
 def _config_path(value: str | None) -> Path:
     return Path(value).expanduser() if value else default_config_path()
 

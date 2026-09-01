@@ -38,6 +38,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+from mesh_ai_gateway.ipc.client import request
+
 # ---------------------------------------------------------------------------
 # EDIT THESE
 # ---------------------------------------------------------------------------
@@ -74,7 +76,6 @@ DB_PATH = Path(__file__).with_name("laundry_hmm.sqlite3")
 try:
     import numpy as np
     from hmmlearn import hmm
-    #from mesh_ai_gateway.ipc.client import request
 except ImportError as exc:
     missing = getattr(exc, "name", "a dependency")
     print(f"\nMissing Python package: {missing}")
@@ -86,6 +87,7 @@ except ImportError as exc:
 # ---------------------------------------------------------------------------
 # DATABASE
 # ---------------------------------------------------------------------------
+
 
 def db_connect() -> sqlite3.Connection:
     db = sqlite3.connect(DB_PATH)
@@ -133,6 +135,7 @@ def init_db() -> None:
 # ---------------------------------------------------------------------------
 # GATEWAY IPC FEED
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class LaundrySample:
@@ -184,9 +187,7 @@ class LaundryCounterFeed:
         while True:
             remaining = deadline - self.loop.time()
             if remaining <= 0:
-                raise RuntimeError(
-                    f"No local laundry sample arrived for {timeout:.0f} seconds."
-                )
+                raise RuntimeError(f"No local laundry sample arrived for {timeout:.0f} seconds.")
 
             try:
                 response = await request(
@@ -218,9 +219,7 @@ class LaundryCounterFeed:
         if self.last_uptime_ms is not None:
             elapsed_ms = (sample.uptime_ms - self.last_uptime_ms) & 0xFFFFFFFF
             if elapsed_ms > 1750:
-                raise RuntimeError(
-                    f"Missed a one-second laundry sample ({elapsed_ms} ms gap)."
-                )
+                raise RuntimeError(f"Missed a one-second laundry sample ({elapsed_ms} ms gap).")
 
         self.last_uptime_ms = sample.uptime_ms
         return sample
@@ -265,6 +264,7 @@ async def connect_sensor() -> tuple[LaundryCounterFeed, LaundrySample]:
 # ---------------------------------------------------------------------------
 # RECORDING
 # ---------------------------------------------------------------------------
+
 
 async def record_cycle(note: str = "") -> None:
     feed: Optional[LaundryCounterFeed] = None
@@ -338,6 +338,7 @@ async def record_cycle(note: str = "") -> None:
 # HMM TRAINING
 # ---------------------------------------------------------------------------
 
+
 def load_training_sequences():
     with db_connect() as db:
         sessions = db.execute(
@@ -372,9 +373,7 @@ def load_training_sequences():
 
             if len(values) >= 30:
                 sequences.append(values)
-                usable_sessions.append(
-                    (session_id, started_at, note, count)
-                )
+                usable_sessions.append((session_id, started_at, note, count))
 
     return sequences, usable_sessions
 
@@ -491,11 +490,7 @@ def describe_model(model) -> None:
 
     print("\nLearned hidden states:")
     for state in range(model.n_components):
-        print(
-            f"  State {state}: "
-            f"expected {rates[state]:.3f} events/sec "
-            f"({labels[state]})"
-        )
+        print(f"  State {state}: expected {rates[state]:.3f} events/sec ({labels[state]})")
 
     print(
         "\nThese are NOT automatically wash/rinse/spin labels. "
@@ -505,9 +500,7 @@ def describe_model(model) -> None:
 
 def print_transition_matrix(model) -> None:
     print("\nTransition probabilities:")
-    header = "          " + " ".join(
-        f"to {i:>5d}" for i in range(model.n_components)
-    )
+    header = "          " + " ".join(f"to {i:>5d}" for i in range(model.n_components))
     print(header)
 
     for i, row in enumerate(model.transmat_):
@@ -545,9 +538,7 @@ def print_session_summaries(model, sequences, sessions) -> None:
         # Avoid printing every two-second twitch. Show segments >= 5 seconds,
         # but still leave the full data in SQLite for future analysis.
         meaningful = [
-            (start, end, state)
-            for start, end, state in segments
-            if (end - start + 1) >= 5
+            (start, end, state) for start, end, state in segments if (end - start + 1) >= 5
         ]
 
         suffix = f" ({note})" if note else ""
@@ -560,15 +551,13 @@ def print_session_summaries(model, sequences, sessions) -> None:
         for start, end, state in meaningful:
             duration = (end - start + 1) * SAMPLE_INTERVAL_SECONDS
             start_sec = start * SAMPLE_INTERVAL_SECONDS
-            print(
-                f"    +{start_sec:6.0f}s  "
-                f"State {state} for {duration:5.0f}s"
-            )
+            print(f"    +{start_sec:6.0f}s  State {state} for {duration:5.0f}s")
 
 
 # ---------------------------------------------------------------------------
 # MODEL LOAD / LIVE INFERENCE
 # ---------------------------------------------------------------------------
+
 
 def load_latest_model():
     with db_connect() as db:
@@ -599,10 +588,7 @@ async def live_monitor() -> None:
     labels = state_activity_labels(model)
 
     print()
-    print(
-        f"Loaded model #{model_id} from {created_at} "
-        f"(training score {score:.2f})."
-    )
+    print(f"Loaded model #{model_id} from {created_at} (training score {score:.2f}).")
     describe_model(model)
 
     feed: Optional[LaundryCounterFeed] = None
@@ -661,6 +647,7 @@ async def live_monitor() -> None:
 # STATUS / MAINTENANCE
 # ---------------------------------------------------------------------------
 
+
 def show_status() -> None:
     with db_connect() as db:
         sessions = db.execute(
@@ -690,10 +677,7 @@ def show_status() -> None:
         for row in sessions:
             session_id, started, ended, note, count = row
             suffix = f" | {note}" if note else ""
-            print(
-                f"  #{session_id}: {started} | "
-                f"{count} sec | ended {ended or 'open'}{suffix}"
-            )
+            print(f"  #{session_id}: {started} | {count} sec | ended {ended or 'open'}{suffix}")
 
     print("\nTrained models:")
     if not models:
@@ -716,18 +700,14 @@ def show_status() -> None:
 
 def delete_last_session() -> None:
     with db_connect() as db:
-        row = db.execute(
-            "SELECT id, started_at FROM sessions ORDER BY id DESC LIMIT 1"
-        ).fetchone()
+        row = db.execute("SELECT id, started_at FROM sessions ORDER BY id DESC LIMIT 1").fetchone()
 
         if row is None:
             print("\nNo sessions to delete.")
             return
 
         session_id, started_at = row
-        answer = input(
-            f"\nDelete session #{session_id} ({started_at})? [y/N]: "
-        ).strip().lower()
+        answer = input(f"\nDelete session #{session_id} ({started_at})? [y/N]: ").strip().lower()
 
         if answer == "y":
             db.execute("DELETE FROM sessions WHERE id=?", (session_id,))
@@ -740,6 +720,7 @@ def delete_last_session() -> None:
 # ---------------------------------------------------------------------------
 # MENU
 # ---------------------------------------------------------------------------
+
 
 def run_async(coro) -> None:
     try:
@@ -771,9 +752,7 @@ def menu() -> None:
         choice = input("> ").strip()
 
         if choice == "1":
-            note = input(
-                "Optional note (e.g. normal, towels, quick wash): "
-            ).strip()
+            note = input("Optional note (e.g. normal, towels, quick wash): ").strip()
             run_async(record_cycle(note))
 
         elif choice == "2":

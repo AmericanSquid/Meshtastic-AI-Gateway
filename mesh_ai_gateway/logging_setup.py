@@ -21,7 +21,7 @@ class RingBufferHandler(logging.Handler):
 
     def recent(self, limit: int = 100) -> list[str]:
         with self._lock:
-            return list(self.lines)[-max(1, limit):]
+            return list(self.lines)[-max(1, limit) :]
 
 
 def configure_logging(level: str, retain_lines: int) -> RingBufferHandler:
