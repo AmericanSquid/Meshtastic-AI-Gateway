@@ -41,7 +41,7 @@ ai:
         num_predict: 180
 
     # big-rig:
-    #   name: "Big Chungus GPU Rig"
+    #   name: "Big GPU Rig"
     #   type: ollama
     #   enabled: true
     #   priority: 2
