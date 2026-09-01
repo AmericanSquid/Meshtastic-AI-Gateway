@@ -68,6 +68,16 @@ ai:
     #   api_key_env: OPENAI_API_KEY
     #   model: gpt-5.6-terra
 
+    # Google Gemini (OpenAI-compatible API):
+    # gemini:
+    #   name: "Google Gemini"
+    #   type: openai
+    #   enabled: true
+    #   priority: 4
+    #   base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+    #   api_key_env: GEMINI_API_KEY
+    #   model: gemini-2.5-flash
+
     # OpenRouter:
     # openrouter:
     #   name: "OpenRouter"
