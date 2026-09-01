@@ -1,0 +1,90 @@
+mesh:
+  transport: tcp
+
+  tcp:
+    host: 192.168.1.80
+    port: 4403
+
+  ble:
+    address: null
+
+  serial:
+    port: null
+
+  channel: 0
+
+  reconnect:
+    attempts: 3
+    timeout: 10
+    delay: 3
+    retry_after_failure: 30
+
+ai:
+  mode: fallback
+
+  request:
+    attempts_per_provider: 2
+    timeout: 20
+
+  providers:
+    local:
+      name: "Lil Local Guy"
+      type: ollama
+      enabled: true
+      priority: 1
+      host: http://127.0.0.1:11434
+      model: qwen3:8b
+      keep_alive: 30m
+      options:
+        temperature: 0.7
+        num_ctx: 8192
+        num_predict: 180
+
+    # big-rig:
+    #   name: "Big Chungus GPU Rig"
+    #   type: ollama
+    #   enabled: true
+    #   priority: 2
+    #   host: http://192.168.1.20:11434
+    #   model: qwen3:30b
+
+    # hf:
+    #   name: "HF Backup"
+    #   type: openai
+    #   enabled: true
+    #   priority: 3
+    #   base_url: https://router.huggingface.co/v1
+    #   api_key_env: HF_TOKEN
+    #   model: your-model
+
+    # ncloud:
+    #   name: "nCloud Backup"
+    #   type: openai
+    #   enabled: true
+    #   priority: 4
+    #   base_url: https://your-ncloud-endpoint.example/v1
+    #   api_key_env: NCLOUD_API_KEY
+    #   model: your-model
+
+    # hermes:
+    #   name: "Hermes"
+    #   type: hermes
+    #   enabled: false
+    #   priority: 10
+    #   command: hermes
+
+bridge:
+  chunk_bytes: 180
+  chunk_delay: 1.0
+  response_max_bytes: 600
+  history_messages: 12
+  queue_size: 50
+  max_concurrent_requests: 2
+
+  system_prompt: |
+    You are communicating over Meshtastic.
+    Keep responses concise and appropriate for a low-bandwidth radio connection.
+
+logging:
+  level: INFO
+  retain_lines: 1000
